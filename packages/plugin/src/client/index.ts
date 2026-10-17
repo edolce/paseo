@@ -11,6 +11,8 @@ export type {
   PluginIcon,
   PluginWorkspaceRowAccessoryContribution,
   PluginWorkspaceRowAccessoryProps,
+  PluginWorkspaceRowTakeoverOptions,
+  PluginWorkspaceRowTakeoverProps,
   PluginPanelLocation,
   PluginOpenPanelOptions,
   PluginWorkspacePanelProps,
