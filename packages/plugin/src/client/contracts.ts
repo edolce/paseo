@@ -108,6 +108,25 @@ export interface PluginWorkspaceRowAccessoryProps {
   isSelected: boolean;
   /** Edge of the square slot in px: 16 for `status`, 40 for `large`. */
   size: number;
+  /** A takeover is playing on this row: hide what the Overlay is acting. */
+  takeover: boolean;
+}
+
+export interface PluginWorkspaceRowTakeoverProps {
+  serverId: string;
+  workspaceId: string;
+  workspaceKey: string;
+  theme: PluginTheme;
+  reducedMotion: boolean;
+  data: unknown;
+  /** Edge of the leading slot in px; the Overlay fills the row's main line, slot at its left. */
+  slotSize: number;
+}
+
+export interface PluginWorkspaceRowTakeoverOptions {
+  /** At most 10 000 ms. */
+  durationMs: number;
+  data?: unknown;
 }
 
 export interface PluginWorkspaceRowAccessoryContribution {
@@ -116,6 +135,8 @@ export interface PluginWorkspaceRowAccessoryContribution {
   Component: ComponentType<PluginWorkspaceRowAccessoryProps>;
   /** `status` keeps the native slot; `large` reserves 40 px beside title and meta. */
   size?: "status" | "large";
+  /** Drawn over the row while a takeover requested by this plugin plays. */
+  Overlay?: ComponentType<PluginWorkspaceRowTakeoverProps>;
 }
 
 export type PluginPanelLocation = "workspace" | "explorer";
@@ -203,6 +224,11 @@ export interface PluginClientContext extends PluginCommandCapabilities, PluginCl
   addSidebarFooterItem(contribution: PluginSidebarItemContribution<PluginText>): PluginCleanup;
   /** Absent on hosts without row accessories: feature-detect. The latest registered one wins. */
   addWorkspaceRowAccessory?(contribution: PluginWorkspaceRowAccessoryContribution): PluginCleanup;
+  /** Plays this plugin's accessory Overlay over a row; null while that row is taken over. */
+  requestRowTakeover?(
+    workspaceId: string,
+    options: PluginWorkspaceRowTakeoverOptions,
+  ): { cancel(): void; finished: Promise<"completed" | "cancelled"> } | null;
   addAgentPanel(contribution: PluginAgentPanelContribution<PluginText>): PluginCleanup;
   addWorkspacePanel(contribution: PluginWorkspacePanelContribution<PluginText>): PluginCleanup;
   addCommandCenterItem(

@@ -2,11 +2,13 @@ import type { PluginWorkspaceRowAccessoryProps } from "@getpaseo/plugin/client";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useCallback, useMemo, type ComponentType, type ReactNode } from "react";
 import { View } from "react-native";
+import { useReducedMotion } from "react-native-reanimated";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import { z } from "zod";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { ProjectStatusBadge } from "@/components/sidebar/project-leading-visual";
+import { isWeb } from "@/constants/platform";
 import { useToast } from "@/contexts/toast-context";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
@@ -27,6 +29,7 @@ import {
   selectWorkspaceRowAccessory,
   type WorkspaceRowAccessoryTarget,
 } from "./workspace-row-model";
+import type { ActiveRowTakeover } from "./workspace-row-takeover";
 
 const SLOT_SIZE = { status: 16, large: 40 } as const;
 
@@ -94,6 +97,7 @@ interface PluginRowSurfaceProps {
   Surface: ComponentType<never>;
   /** Clears a caught render error when it changes, like a new accessory in the same slot. */
   resetKey?: unknown;
+  onError?(error: Error): void;
   /** What the row shows while the plugin's host is offline or after the plugin throws. */
   children?: ReactNode;
   [prop: string]: unknown;
@@ -104,6 +108,7 @@ function PluginRowSurfaceHost({
   plugin,
   Surface,
   resetKey,
+  onError,
   children = null,
   ...props
 }: PluginRowSurfaceProps) {
@@ -126,6 +131,7 @@ function PluginRowSurfaceHost({
       Surface={Surface}
       resetKey={resetKey}
       renderError={renderFallback}
+      onError={onError}
     >
       <PluginEnvironmentProvider environment={environment}>
         <Rendered {...props} />
@@ -162,7 +168,7 @@ function AccessoryFrame({ Accessory, backdrop, loading, ...props }: AccessoryFra
 
 type WorkspaceRowLeadingProps = Pick<
   AccessoryFrameProps,
-  "isHovered" | "isSelected" | "backdrop" | "loading"
+  "isHovered" | "isSelected" | "takeover" | "backdrop" | "loading"
 > & {
   accessories: WorkspaceRowAccessories;
   workspace: SidebarWorkspaceEntry;
@@ -196,7 +202,49 @@ export function WorkspaceRowLeading({
   return largeRail ? <View style={styles.largeRail}>{leading}</View> : leading;
 }
 
+/** The takeover Overlay: fills the row's main line over the faded title and meta, no pointer. */
+// pointerEvents "none" covers the whole subtree on native, but on web a descendant can opt back in
+// with its own pointer-events. `inert` keeps the Overlay's subtree out of hit testing and focus, so
+// clicks always reach the row underneath.
+function shieldOverlay(node: View | null) {
+  if (isWeb && node) (node as unknown as HTMLElement).setAttribute("inert", "");
+}
+
+export function WorkspaceRowTakeoverLayer({
+  takeover,
+  accessory,
+  workspace,
+}: {
+  takeover: ActiveRowTakeover;
+  accessory: WorkspaceRowAccessoryTarget | null;
+  workspace: SidebarWorkspaceEntry;
+}) {
+  const reducedMotion = useReducedMotion();
+  return (
+    <View ref={shieldOverlay} style={styles.layer}>
+      <PluginRowSurface
+        plugin={takeover.plugin}
+        Surface={takeover.Overlay}
+        onError={takeover.cancel}
+        {...rowIds(workspace)}
+        reducedMotion={reducedMotion}
+        data={takeover.data}
+        slotSize={SLOT_SIZE[accessory?.accessory.size ?? "status"]}
+      />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  layer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    overflow: "hidden",
+    pointerEvents: "none",
+  },
   // Centered on title and meta together.
   largeRail: {
     width: SLOT_SIZE.large,

@@ -25,10 +25,12 @@ import {
   type PluginTimelineRendererContribution,
   type PluginTimelineTransformerContribution,
   type PluginWorkspaceRowAccessoryContribution,
+  type PluginWorkspaceRowTakeoverOptions,
   type PluginButtonRegistration,
 } from "@getpaseo/plugin/client";
 import type {
   EvaluatedPlugin,
+  EvaluatedWorkspaceRowAccessory,
   PluginSidebarSection,
   PluginAttachmentSourceContribution,
   PluginThemeContribution,
@@ -41,6 +43,7 @@ import type {
 } from "./types";
 import type { ComponentType } from "react";
 import { parsePluginIcon, parseSerializablePluginIcon } from "./icons";
+import { endRowTakeoversOf } from "./workspace-row-takeover";
 import { parsePluginThemeContribution } from "./themes";
 
 const CONTRIBUTION_ID = /^[a-z][a-z0-9-]*$/;
@@ -115,7 +118,15 @@ export type PluginClientRuntime = Pick<
   | "openPanel"
   | "addComposerPill"
   | "addHeaderButton"
-> & { hosts: ReturnType<typeof createPluginHosts> };
+> & {
+  hosts: ReturnType<typeof createPluginHosts>;
+  /** `accessories` is the plugin's live registration list, already filled during setup. */
+  requestRowTakeover?(
+    workspaceId: string,
+    options: PluginWorkspaceRowTakeoverOptions,
+    accessories: readonly EvaluatedWorkspaceRowAccessory[],
+  ): ReturnType<NonNullable<PluginClientContext["requestRowTakeover"]>>;
+};
 
 // COMPAT(pluginReactNativeEntrypoint): added in v0.13.0, remove after 2027-04-20
 // The 0.12 entry exposed the reveal hook as well as UI components.
@@ -242,8 +253,14 @@ export function runPluginClientBundle(
       () => workspacePanelIds.delete(normalizedId),
     );
   }
+  const { requestRowTakeover } = runtime;
   const pluginContext: PluginClientContext = {
     ...runtime,
+    // Takeovers read the collector, not the installation, so setup can request one.
+    requestRowTakeover: requestRowTakeover
+      ? (workspaceId, options) =>
+          requestRowTakeover(workspaceId, options, collector.workspaceRowAccessories)
+      : undefined,
     addSettingsScreen(contribution) {
       const screenId = requireId(contribution.id, "settings screen id");
       if (settingsScreenIds.has(screenId))
@@ -307,20 +324,21 @@ export function runPluginClientBundle(
     },
     addWorkspaceRowAccessory(contribution: PluginWorkspaceRowAccessoryContribution) {
       const accessoryId = requireId(contribution.id, "workspace row accessory id");
-      const { Component, size = "status" } = contribution;
+      const { Component, Overlay, size = "status" } = contribution;
       if (workspaceRowAccessoryIds.has(accessoryId)) {
         throw new Error(`Duplicate workspace row accessory: ${accessoryId}`);
       }
-      if (!isComponentType(Component) || (size !== "status" && size !== "large")) {
+      const validOverlay = Overlay === undefined || isComponentType(Overlay);
+      if (!isComponentType(Component) || !validOverlay || (size !== "status" && size !== "large")) {
         throw new Error(`Invalid workspace row accessory: ${accessoryId}`);
       }
       workspaceRowAccessoryIds.add(accessoryId);
       const sequence = ++workspaceRowAccessorySequence;
-      return register(
-        collector.workspaceRowAccessories,
-        { id: accessoryId, Component, size, sequence },
-        () => workspaceRowAccessoryIds.delete(accessoryId),
-      );
+      const accessory = { id: accessoryId, Component, Overlay, size, sequence };
+      return register(collector.workspaceRowAccessories, accessory, () => {
+        workspaceRowAccessoryIds.delete(accessoryId);
+        endRowTakeoversOf(accessory);
+      });
     },
     addFilePanel(contribution) {
       const panelId = requireId(contribution.id, "file panel id");
