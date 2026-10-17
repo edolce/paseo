@@ -96,6 +96,26 @@ export type PluginIcon<Props extends PluginIconProps = PluginIconProps> =
   | PluginSerializableIcon
   | ComponentType<Props>;
 
+export interface PluginWorkspaceRowAccessoryProps {
+  serverId: string;
+  workspaceId: string;
+  workspaceKey: string;
+  theme: PluginTheme;
+  statusBucket: "needs_input" | "failed" | "running" | "attention" | "done";
+  isHovered: boolean;
+  isSelected: boolean;
+  /** Edge of the square slot in px: 16 for `status`, 40 for `large`. */
+  size: number;
+}
+
+export interface PluginWorkspaceRowAccessoryContribution {
+  id: string;
+  /** Replaces the row's status slot; the native status stays as a corner badge over it. */
+  Component: ComponentType<PluginWorkspaceRowAccessoryProps>;
+  /** `status` keeps the native slot; `large` reserves 40 px beside title and meta. */
+  size?: "status" | "large";
+}
+
 export type PluginPanelLocation = "workspace" | "explorer";
 
 export interface PluginOpenPanelOptions {
@@ -140,6 +160,8 @@ export interface PluginClientContext extends PluginCommandCapabilities, PluginCl
   addScreen(contribution: PluginScreenContribution): PluginCleanup;
   addSidebarHeaderItem(contribution: PluginSidebarItemContribution): PluginCleanup;
   addSidebarFooterItem(contribution: PluginSidebarItemContribution): PluginCleanup;
+  /** Absent on hosts without row accessories: feature-detect. The latest registered one wins. */
+  addWorkspaceRowAccessory?(contribution: PluginWorkspaceRowAccessoryContribution): PluginCleanup;
   addWorkspacePanel(contribution: PluginWorkspacePanelContribution): PluginCleanup;
   addCommandCenterItem(contribution: PluginCommandCenterItemContribution): PluginCleanup;
   addSlashCommand(contribution: PluginClientSlashCommandContribution): PluginCleanup;
