@@ -2091,6 +2091,63 @@ Complete directory examples:
 - [PDF panel](https://github.com/getpaseo/paseo/tree/main/plugin-examples/pdf-panel): `useFileUrl` with `Loading` and `DocumentFrame`.
 - [Markdown panel](https://github.com/getpaseo/paseo/tree/main/plugin-examples/markdown-panel): a bundled CodeMirror editor that reads once, saves with `writeText`, and resolves conflicts, with read-only native text.
 
+## Workspace row accessories
+
+Draw a small component in the leading slot of every sidebar workspace row of the plugin's host.
+The method is optional on `PluginClientContext`, so feature-detect it:
+
+```tsx
+import type {
+  PluginClientContext,
+  PluginWorkspaceRowAccessoryProps,
+} from "@getpaseo/plugin/client";
+import { View } from "react-native";
+
+function CiGlyph({ size, theme, statusBucket }: PluginWorkspaceRowAccessoryProps) {
+  const color =
+    statusBucket === "failed" ? theme.colors.statusDanger : theme.colors.foregroundMuted;
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        borderColor: color,
+        borderWidth: 2,
+      }}
+    />
+  );
+}
+
+export default function contribute(client: PluginClientContext) {
+  return (
+    client.addWorkspaceRowAccessory?.({ id: "ci", size: "status", Component: CiGlyph }) ??
+    (() => {})
+  );
+}
+```
+
+`addWorkspaceRowAccessory` fields:
+
+| Field       | Required | Meaning                                                                     |
+| ----------- | -------- | --------------------------------------------------------------------------- |
+| `id`        | Yes      | Plugin-local accessory ID.                                                  |
+| `Component` | Yes      | React Native component drawn in the slot.                                   |
+| `size`      | No       | `status` (default, the native 16 px status slot) or `large` (a 40 px slot). |
+
+The component receives `serverId`, `workspaceId`, `workspaceKey`, `theme`, `statusBucket`,
+`isHovered`, `isSelected` and `size` (the side of its square in pixels). Draw within that square.
+
+Paseo keeps the native status as a badge in the slot's corner, so the row still reports what needs
+attention. The slot keeps its size while the plugin loads, after the component throws, and for up
+to 30 s while its host is offline; the last two show the native status instead. One accessory owns a row: the
+most recently registered one on the host. A `large` accessory on any host widens the leading slot
+of every row, so titles stay on one rail. Rows that show their project icon give it to the
+accessory; the project name stays in the meta line.
+
+The accessory renders once per visible row. Share timers and animation clocks across rows and do
+nothing per frame while idle.
+
 ## Command Center items
 
 Open the Command Center with **⌘K** on macOS or **Ctrl+K** on Windows and Linux, then search for the item title.

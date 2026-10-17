@@ -24,6 +24,7 @@ import {
   type PluginSurfaceProps,
   type PluginTimelineRendererContribution,
   type PluginTimelineTransformerContribution,
+  type PluginWorkspaceRowAccessoryContribution,
   type PluginButtonRegistration,
 } from "@getpaseo/plugin/client";
 import type {
@@ -44,6 +45,7 @@ import { parsePluginThemeContribution } from "./themes";
 
 const CONTRIBUTION_ID = /^[a-z][a-z0-9-]*$/;
 const PANEL_LOCATIONS = ["workspace", "explorer"] as const;
+let workspaceRowAccessorySequence = 0;
 const TIMELINE_ITEM_TYPES = new Set([
   "user_message",
   "assistant_message",
@@ -138,6 +140,7 @@ export function runPluginClientBundle(
     themes: [],
     timelineTransformers: [],
     timelineRenderers: [],
+    workspaceRowAccessories: [],
   };
   const surfaceIds = new Set<string>();
   const settingsScreenIds = new Set<string>();
@@ -153,6 +156,7 @@ export function runPluginClientBundle(
   const themeIds = new Set<string>();
   const timelineTransformerIds = new Set<string>();
   const timelineRendererIds = new Set<string>();
+  const workspaceRowAccessoryIds = new Set<string>();
   const removals = new Set<PluginCleanup>();
   let setupComplete = false;
   let stopped = false;
@@ -300,6 +304,23 @@ export function runPluginClientBundle(
       if (!legacy.title) throw new Error(`Sidebar item ${normalizedId} has no title`);
       ids.add(normalizedId);
       return register(collector.legacySidebarItems, legacy, () => ids.delete(normalizedId));
+    },
+    addWorkspaceRowAccessory(contribution: PluginWorkspaceRowAccessoryContribution) {
+      const accessoryId = requireId(contribution.id, "workspace row accessory id");
+      const { Component, size = "status" } = contribution;
+      if (workspaceRowAccessoryIds.has(accessoryId)) {
+        throw new Error(`Duplicate workspace row accessory: ${accessoryId}`);
+      }
+      if (!isComponentType(Component) || (size !== "status" && size !== "large")) {
+        throw new Error(`Invalid workspace row accessory: ${accessoryId}`);
+      }
+      workspaceRowAccessoryIds.add(accessoryId);
+      const sequence = ++workspaceRowAccessorySequence;
+      return register(
+        collector.workspaceRowAccessories,
+        { id: accessoryId, Component, size, sequence },
+        () => workspaceRowAccessoryIds.delete(accessoryId),
+      );
     },
     addFilePanel(contribution) {
       const panelId = requireId(contribution.id, "file panel id");
@@ -592,5 +613,6 @@ export function runPluginClientBundle(
     themes: collector.themes,
     timelineTransformers: collector.timelineTransformers,
     timelineRenderers: collector.timelineRenderers,
+    workspaceRowAccessories: collector.workspaceRowAccessories,
   };
 }
